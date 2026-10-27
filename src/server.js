@@ -136,7 +136,10 @@ server.on('upgrade', (req, socket, head) => {
   const forwardedProto = req.headers['x-forwarded-proto'];
   const proto = forwardedProto === 'https' ? 'https' : 'http';
   const expectedOrigin = proto + '://' + req.headers.host;
-  if (CONFIG_ERROR || req.url !== '/ws' || !isAuthenticated(req) || req.headers.origin !== expectedOrigin) {
+  const reason = CONFIG_ERROR ? 'config' : req.url !== '/ws' ? 'path' : !isAuthenticated(req) ? 'auth'
+    : req.headers.origin !== expectedOrigin ? 'origin ' + req.headers.origin + ' != ' + expectedOrigin : null;
+  if (reason) {
+    console.warn('WebSocket upgrade rejected:', reason);
     socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
     socket.destroy();
     return;
@@ -235,8 +238,8 @@ wss.on('connection', async (ws) => {
     await stopped;
     await frames;
   } catch (err) {
-    console.error('Browser session error:', err?.message);
-    send(ws, { type: 'error', message: 'ブラウザを起動できませんでした' });
+    console.error('Browser session error:', err);
+    send(ws, { type: 'error', message: 'ブラウザを起動できませんでした: ' + (err?.message || '').split('\n')[0].slice(0, 200) });
     ws.close(1011, 'Browser error');
   } finally {
     alive = false;

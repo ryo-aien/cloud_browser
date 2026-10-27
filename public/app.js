@@ -6,12 +6,14 @@ let viewport = { width: 1280, height: 800 };
 let attempts = 0;
 let reconnectTimer;
 let connected = false;
+let lastError = '';
 
 function message(text) { status.textContent = text; }
 function send(payload) {
   if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload));
 }
 function connect() {
+  lastError = '';
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   ws = new WebSocket(protocol + '//' + location.host + '/ws');
   message('Cloud Runのブラウザに接続中…');
@@ -27,6 +29,7 @@ function connect() {
     } else if (data.type === 'location') {
       address.value = data.url === 'about:blank' ? '' : data.url;
     } else if (data.type === 'error') {
+      lastError = data.message;
       message(data.message);
     }
   });
@@ -38,7 +41,8 @@ function connect() {
     }
     attempts += 1;
     const delay = Math.min(30_000, 1000 * 2 ** Math.min(attempts, 5));
-    message('接続が切れました。再接続するとブラウザ状態は初期化されます。');
+    message('接続が切れました（code ' + e.code + (lastError ? ': ' + lastError : '') + '）。' +
+      Math.round(delay / 1000) + '秒後に再接続します。');
     reconnectTimer = setTimeout(connect, delay);
   });
   ws.addEventListener('error', () => message('WebSocket接続でエラーが発生しました'));
