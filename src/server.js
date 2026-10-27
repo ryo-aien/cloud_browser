@@ -18,10 +18,12 @@ const SESSION_TTL_MS = 4 * 60 * 60 * 1000;
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const COOKIE_NAME = 'remote_browser_session';
 
-if (!APP_PASSWORD || APP_PASSWORD.length < 12 || !SESSION_SECRET || SESSION_SECRET.length < 32) {
-  console.error('APP_PASSWORD(12文字以上) と SESSION_SECRET(32文字以上) を設定してください');
-  process.exit(1);
-}
+// Keep listening even when misconfigured so Cloud Run's startup probe passes;
+// every request except /healthz then returns 503 until the secrets are set.
+const CONFIG_ERROR = (!APP_PASSWORD || APP_PASSWORD.length < 12 || !SESSION_SECRET || SESSION_SECRET.length < 32)
+  ? 'APP_PASSWORD(12文字以上) と SESSION_SECRET(32文字以上) を設定してください'
+  : null;
+if (CONFIG_ERROR) console.error(CONFIG_ERROR);
 
 function sign(value) {
   return crypto.createHmac('sha256', SESSION_SECRET).update(value).digest('base64url');
@@ -72,6 +74,10 @@ app.use((_req, res, next) => {
 });
 app.use(express.json({ limit: '10kb' }));
 app.get('/healthz', (_req, res) => res.status(200).send('ok'));
+app.use((_req, res, next) => {
+  if (!CONFIG_ERROR) return next();
+  return res.status(503).type('text/plain; charset=utf-8').send('設定エラー: ' + CONFIG_ERROR);
+});
 app.get('/login', (req, res) => {
   if (isAuthenticated(req)) return res.redirect('/');
   return res.sendFile(path.join(ROOT, 'public', 'login.html'));
@@ -130,7 +136,7 @@ server.on('upgrade', (req, socket, head) => {
   const forwardedProto = req.headers['x-forwarded-proto'];
   const proto = forwardedProto === 'https' ? 'https' : 'http';
   const expectedOrigin = proto + '://' + req.headers.host;
-  if (req.url !== '/ws' || !isAuthenticated(req) || req.headers.origin !== expectedOrigin) {
+  if (CONFIG_ERROR || req.url !== '/ws' || !isAuthenticated(req) || req.headers.origin !== expectedOrigin) {
     socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
     socket.destroy();
     return;

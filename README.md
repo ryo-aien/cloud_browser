@@ -117,6 +117,18 @@ gcloud run deploy "$SERVICE" \
   --set-env-vars "ALLOWED_HOSTS=example.com,MAX_SESSIONS=2"
 ~~~
 
+### GitHub連携（継続的デプロイ）でデプロイする場合
+
+Cloud RunコンソールのGitHub連携（Cloud Buildトリガー）では `--set-secrets` が渡されないため、サービス側に一度だけ設定してください。設定は以降のリビジョンにも引き継がれます。未設定でもコンテナは起動しますが、`/healthz` 以外は503（設定エラー）を返します。
+
+~~~bash
+gcloud run services update cloud-browser --region europe-west1 \
+  --service-account "$SERVICE_ACCOUNT" \
+  --memory 2Gi --cpu 2 --timeout 3600 --session-affinity \
+  --set-secrets "APP_PASSWORD=remote-browser-password:latest,SESSION_SECRET=remote-browser-secret:latest" \
+  --set-env-vars "ALLOWED_HOSTS=example.com,MAX_SESSIONS=2"
+~~~
+
 本番用途では、権限の最小化、WebSocket再接続、監視、レート制限、ネットワーク制御、認証設計を別途検討してください。別ドメインを許可する場合はALLOWED_HOSTSを変更してください。
 
 **固定の外向きIPが必要な場合:** Direct VPC egressとCloud NAT（予約済み静的IP）を追加します。標準のCloud Runからの送信元IPは固定ではありません。
