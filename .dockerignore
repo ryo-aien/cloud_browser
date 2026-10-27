@@ -1,0 +1,10 @@
+.git
+node_modules
+npm-debug.log
+.env
+.env.*
+!.env.example
+README.md
+test
+*.zip
+.DS_Store
